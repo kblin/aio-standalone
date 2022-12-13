@@ -8,8 +8,7 @@ long_description = short_description
 if os.path.exists('README.rst'):
     long_description = open('README.rst').read()
 
-install_requires = [
-]
+install_requires: list[str] = []
 
 
 tests_require = [
@@ -61,4 +60,3 @@ setup(
         'testing': tests_require,
     },
 )
-

@@ -3,7 +3,7 @@ from aiostandalone.log import FakeLogger, fake_logger
 
 
 def test_object():
-    fake = FakeLogger()
+    fake = FakeLogger("Fake")
     fake.debug("Nope")
     fake.info("Nope")
     fake.warning("Nope")

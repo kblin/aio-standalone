@@ -1,7 +1,8 @@
 """Fake logger configuration"""
+from logging import Logger
 
 
-class FakeLogger:
+class FakeLogger(Logger):
     """Fake logger that simply discards all logs"""
 
     def debug(self, msg, *args, **kwargs):
@@ -25,4 +26,4 @@ class FakeLogger:
         pass
 
 
-fake_logger = FakeLogger()
+fake_logger = FakeLogger("FakeLogger")

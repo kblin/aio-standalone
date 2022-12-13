@@ -2,7 +2,7 @@
 from collections import defaultdict
 import pytest
 
-from aiostandalone.signal import Signal
+from aiostandalone.aiosignal import Signal
 
 
 def test_init():

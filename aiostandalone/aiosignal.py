@@ -9,7 +9,7 @@ class Signal(list):
     """
     __slots__ = ('_app', )
 
-    def __init__(self, app):
+    def __init__(self, app) -> None:
         """Connect the signal to the app
 
         :param app: app the signal is conencted to
@@ -17,10 +17,9 @@ class Signal(list):
         super().__init__()
         self._app = app
 
-    async def send(self, *args, **kwargs):
+    async def send(self, *args, **kwargs) -> None:
         """Send args and kwargs to all registered callbacks"""
         for callback in self:
             res = callback(*args, **kwargs)
             if asyncio.iscoroutine(res) or isinstance(res, asyncio.Future):
                 await res
-

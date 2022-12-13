@@ -33,7 +33,7 @@ async def fake_main_task(app):
 
 
 def test_run(loop):
-    app = StandaloneApplication()
+    app = StandaloneApplication(loop=loop)
 
     app.on_startup.append(fake_startup)
     app.on_shutdown.append(fake_shutdown)
@@ -50,20 +50,15 @@ def test_run(loop):
     assert app['ran_main_task']
 
 
-def test_loop():
-    loop = asyncio.get_event_loop()
+def test_loop(loop):
+    app = StandaloneApplication(loop=loop)
+    assert app.loop == loop
+
     app = StandaloneApplication()
-    app.loop = loop
-
-    assert app._loop == loop
-
-    app.loop = None
-
-    with pytest.raises(RuntimeError):
-        app.loop = 23
+    assert app.loop and app.loop != loop
 
 
-async def fake_failing_task(_):
+async def fake_aborting_task(_):
     await asyncio.sleep(0.01)
     raise SystemError
 
@@ -73,14 +68,34 @@ async def long_running_side_task(_):
 
 
 def test_abort(loop):
-    app = StandaloneApplication()
+    app = StandaloneApplication(loop=loop)
+    app.on_startup.append(fake_startup)
+    app.on_shutdown.append(fake_shutdown)
+    app.on_cleanup.append(fake_cleanup)
+
+    app.main_task = fake_aborting_task
+    app.tasks.append(long_running_side_task)
+
+    app.run()
+    assert app['ran_shutdown']
+    assert app['ran_cleanup']
+
+
+async def fake_failing_task(_):
+    await asyncio.sleep(0.01)
+    raise RuntimeError("Ruh roh")
+
+
+def test_exception(loop):
+    app = StandaloneApplication(loop=loop)
     app.on_startup.append(fake_startup)
     app.on_shutdown.append(fake_shutdown)
     app.on_cleanup.append(fake_cleanup)
 
     app.main_task = fake_failing_task
     app.tasks.append(long_running_side_task)
+    with pytest.raises(RuntimeError, match="Ruh roh"):
+        app.run()
 
-    app.run(loop)
     assert app['ran_shutdown']
     assert app['ran_cleanup']

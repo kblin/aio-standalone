@@ -1,13 +1,20 @@
 """Standalone application class"""
 import asyncio
-from .signal import Signal
+from asyncio import AbstractEventLoop, CancelledError, Task
+from logging import Logger
+from typing import Any, Callable, Coroutine, Optional
+
+from .aiosignal import Signal
 from .log import fake_logger
+
+AppTask = Callable[["StandaloneApplication"], Coroutine[None, None, None]]
 
 
 class StandaloneApplication:
     """A standalone async application to run"""
 
-    def __init__(self, *, logger=fake_logger):
+    def __init__(self, *, logger: Logger = fake_logger,
+                 loop: Optional[AbstractEventLoop] = None) -> None:
         """Initialize the application to run
 
         :param logger: The logger class to use
@@ -18,42 +25,42 @@ class StandaloneApplication:
         self._on_shutdown = Signal(self)
         self._on_cleanup = Signal(self)
 
-        self._state = {}
-        self._loop = None
-        self._started_tasks = []
-        self.tasks = []
-        self.main_task = None
+        self._state: dict[str, Any] = {}
+        self._loop = loop
+        self._started_tasks: list[Task] = []
+        self.tasks: list[AppTask] = []
+        self.main_task: Optional[AppTask] = None
 
-    def __getitem__(self, key):
+    def __getitem__(self, key) -> Any:
         return self._state[key]
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key, value) -> None:
         self._state[key] = value
 
     @property
-    def on_startup(self):
+    def on_startup(self) -> Signal:
         return self._on_startup
 
     @property
-    def on_shutdown(self):
+    def on_shutdown(self) -> Signal:
         return self._on_shutdown
 
     @property
-    def on_cleanup(self):
+    def on_cleanup(self) -> Signal:
         return self._on_cleanup
 
-    async def startup(self):
+    async def startup(self) -> None:
         """Trigger the startup callbacks"""
         await self.on_startup.send(self)
 
-    async def shutdown(self):
+    async def shutdown(self) -> None:
         """Trigger the shutdown callbacks
 
         Call this before calling cleanup()
         """
         await self.on_shutdown.send(self)
 
-    async def cleanup(self):
+    async def cleanup(self) -> None:
         """Trigger the cleanup callbacks
 
         Calls this after calling shutdown()
@@ -61,57 +68,43 @@ class StandaloneApplication:
         await self.on_cleanup.send(self)
 
     @property
-    def loop(self):
+    def loop(self) -> AbstractEventLoop:
+        if not self._loop:
+            self._loop = asyncio.new_event_loop()
         return self._loop
 
-    @loop.setter
-    def loop(self, loop):
-        if loop is None:
-            loop = asyncio.get_event_loop()
-
-        if self._loop is not None and self._loop is not loop:
-            raise RuntimeError("Can't override event loop after init")
-
-        self._loop = loop
-
-    def start_task(self, func):
+    def start_task(self, func: AppTask) -> Task:
         """Start up a task"""
         task = self.loop.create_task(func(self))
         self._started_tasks.append(task)
 
-        def done_callback(done_task):
+        def done_callback(done_task) -> None:
             self._started_tasks.remove(done_task)
 
         task.add_done_callback(done_callback)
         return task
 
-    def run(self, loop=None):
-        """Actually run the application
-
-        :param loop: Custom event loop or None for default
-        """
-        if loop is None:
-            loop = asyncio.get_event_loop()
-
-        self.loop = loop
-
+    def run(self) -> None:
+        """ Actually run the application """
+        loop = self.loop
         loop.run_until_complete(self.startup())
 
         for func in self.tasks:
             self.start_task(func)
 
+        def shutdown_exception_handler(_loop: AbstractEventLoop, context: dict[str, Any]) -> None:
+            if "exception" not in context or not isinstance(context["exception"], CancelledError):
+                _loop.default_exception_handler(context)
+        loop.set_exception_handler(shutdown_exception_handler)
+
         try:
+            assert self.main_task
             task = self.start_task(self.main_task)
             loop.run_until_complete(task)
         except (KeyboardInterrupt, SystemError):
             print("Attempting graceful shutdown, press Ctrl-C again to exit", flush=True)
 
-            def shutdown_exception_handler(_loop, context):
-                if "exception" not in context or not isinstance(context["exception"], asyncio.CancelledError):
-                    _loop.default_exception_handler(context)
-            loop.set_exception_handler(shutdown_exception_handler)
-
-            tasks = asyncio.gather(*self._started_tasks, loop=loop, return_exceptions=True)
+            tasks = asyncio.gather(*self._started_tasks, return_exceptions=True)
             tasks.add_done_callback(lambda _: loop.stop())
             tasks.cancel()
 
