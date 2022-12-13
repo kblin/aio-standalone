@@ -8,3 +8,5 @@ __pycache__/*
 htmlcov/*
 .cache/*
 dist/*
+.mypy_cache/*
+.pytest_cache/*

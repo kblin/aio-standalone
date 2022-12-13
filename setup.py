@@ -15,6 +15,8 @@ install_requires: list[str] = []
 
 
 tests_require = [
+    'flake8',
+    'mypy',
     'pytest',
     'coverage',
     'pytest-cov',
